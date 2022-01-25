@@ -2,40 +2,80 @@ import Head from 'next/head'
 import cryptoJs from 'crypto-js';
 import { useEffect, useState } from 'react';
 import styles from '../styles/Home.module.css'
+import { Button, Card, Divider, Grid, Input, Paper, Typography } from '@mui/material';
 
 const secretKey = 'Secret Passphrase'
+const secretKeyApi = 'Secret Passphrase API'
 const iv  = cryptoJs.enc.Hex.parse('be410fea41df7162a679875ec131cf2c');
 export default function Home() {
   const [text,setText] = useState('')
-  const [textEncrypted,setTextEncrypted] = useState()
+  const [counter,setCounter] = useState(1)
+  const [responseApi,setResponseApi] = useState('')
+  const [textEncrypted,setTextEncrypted] = useState(null)
   const [textDecrypted,setTextDecrypted] = useState()
+  const [loading, setLoading] = useState(false)
 
-  useEffect(() => {
-    const encrypted  = cryptoJs.AES.encrypt(text, secretKey, 
+  const encryptMessage = (message) => {
+    const encrypted  = cryptoJs.AES.encrypt(message, secretKey, 
       {
         iv,
         mode: cryptoJs.mode.CBC,
         padding: cryptoJs.pad.Pkcs7
     });
-    setTextEncrypted(encrypted.toString())
+    return encrypted.toString()
+  }
+
+  const decryptMessage = (encryptedMessage, _secretKey) => {
+    const decrypted  = cryptoJs.AES.decrypt(encryptedMessage, _secretKey, {
+      iv,
+      mode: cryptoJs.mode.CBC,
+      padding: cryptoJs.pad.Pkcs7
+    });
+    return decrypted.toString(cryptoJs.enc.Utf8);
+  }
+
+  useEffect(() => {
+    
+    setTextEncrypted(encryptMessage(text) || 'Error al decifrar los datos')
     
   }, [text])
 
   useEffect(()=>{
     try{
-      const decrypted  = cryptoJs.AES.decrypt(textEncrypted, secretKey, {
-        iv,
-        mode: cryptoJs.mode.CBC,
-        padding: cryptoJs.pad.Pkcs7
-      });
-      console.log({decrypted, textEncrypted});
-      setTextDecrypted(decrypted.toString(cryptoJs.enc.Utf8) || 'error')
+      setTextDecrypted(decryptMessage(textEncrypted, secretKey) || 'error')
       
     }catch(err) {
       setTextDecrypted('Error al decifrar texto')
     }
   },[textEncrypted])
 
+
+  /**
+   * @name apiCall
+   * @description Llamado fetch con datos cifrados
+   */
+  const apiCall = () => {
+    setLoading(true)
+    const body = JSON.stringify({
+      data : textEncrypted
+    })
+    fetch('http://localhost:8000/',{
+      method:'POST',
+      body,
+      headers: {
+        'Content-Type': 'application/json'
+        // 'Content-Type': 'application/x-www-form-urlencoded',
+      },
+    }).then(res => res.json())
+    .then( res => {
+      setTimeout(()=>{
+        setLoading(false)
+        res.messageResponseDecrypted = decryptMessage(res.encrypted, secretKeyApi)
+        setResponseApi(res)
+        setCounter(counter+1);
+      },1500)
+    })
+  }
 
 
   return (
@@ -46,31 +86,79 @@ export default function Home() {
         <link rel="icon" href="/favicon.ico" />
       </Head>
 
-      <main className={styles.main}>
-        <h1 className={styles.title}>
-          Test Crypto JS with React JS
-        </h1>
+      <main>
+       
+      <Grid container spacing={4}> 
 
-      
-        <div className={styles.grid}>
+        <Grid item xs={12}>
+          <Typography variant="h1" component="div" gutterBottom>
+            Test Crypto JS with React JS
+          </Typography>
+
+        </Grid>
+
+        <Grid item xs={12}>
+
+          <Paper elevation={1} style={{padding: 20}} >
+            <Grid container>
+              <Grid item xs>
+                <Typography>Plain text</Typography>
+                <Input 
+                multiline
+                value={text}
+                maxRows={4} 
+                onChange={(e) => setText(e.target.value)}
+                />
+                
+
+              </Grid>
+              <Grid item xs>
+                <Typography>Encrypted String</Typography>
+                <pre>
+                {textEncrypted}
+                </pre>
+
+              </Grid>
+            </Grid>
+
+          </Paper>
+
+
+        </Grid>
+
+        <Grid item  xs={12} >
+          <Paper elevation={2} style={{padding: 20}}>
+            <Grid container spacing={4}>
+              <Grid item xs>
+                <Typography>API Call</Typography>
+                <Button variant='contained'  
+                  disabled={!textEncrypted || loading}
+                  
+                  onClick={apiCall}>Call API</Button>
+
+              </Grid>
+              <Grid item xs>
+                <div className='console'>
+                    <label>API response</label><br/>
+                    {loading && <>Fectchin to api...<br /></>}
+                    [response start...]<br/>
+                    <ul>
+                        {Object.keys(responseApi).map((key, index) => (<li key={index}>
+                        {index + 1}{' '}<label style={{fontWeight:'bold'}}>{key}</label> {responseApi[key]}<br/>
+                      </li>) )}
+                    </ul>
+                    [response end...]<br/>
+                </div>
+              </Grid>
+
+            </Grid>
+          </Paper>
+        </Grid>
+
+
+
+      </Grid>
          
-         <textarea onChange={(e) => setText(e.target.value)} >{text}</textarea>
-
-        </div>
-<div style={{flex:1, display: 'flex', width: '100%'}}>
-         <h3>textDecrypted</h3>
-         <p>
-           {textDecrypted}
-         </p>
-
-</div>
-<div style={{flex:1, display:'flex', width: '100%'}}>
-         <h3>textEncrypted</h3>
-         <p>
-           {textEncrypted}
-         </p>
-
-</div>
       </main>
 
       <footer className={styles.footer}>
